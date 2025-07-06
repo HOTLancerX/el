@@ -31,11 +31,20 @@ const ArticleCardSimple: React.FC<{ article: IArticle }> = ({ article }) => {
 
 interface SearchPageProps {
   searchParams: { q?: string; page?: string };
+import { getSiteSettings as fetchSiteSettings } from '@/lib/settingsService'; // aliased
+
 }
 
 // Function to perform search and get articles
-async function searchArticles(query: string, page: number = 1, limit: number = 10) {
+async function searchArticles(query: string, page: number = 1, defaultLimit?: number) {
   await dbConnect();
+
+  let limit = defaultLimit;
+  if (limit === undefined) {
+    const settings = await fetchSiteSettings();
+    limit = settings.postsPerPage > 0 ? settings.postsPerPage : 10;
+  }
+
 
   if (!query || query.trim() === '') {
     return { articles: [], totalArticles: 0, totalPages: 0, searchQuery: '' };
@@ -75,43 +84,50 @@ async function searchArticles(query: string, page: number = 1, limit: number = 1
   return { articles, totalArticles, totalPages, searchQuery: query };
 }
 
+import { getSiteSettings } from '@/lib/settingsService'; // Import settings service
+
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
+  const settings = await getSiteSettings();
   const query = searchParams.q || '';
   const siteBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS';
+  // const siteName = settings.siteTitle || process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS'; // From root layout
   const currentUrl = `${siteBaseUrl}/search${query ? `?q=${encodeURIComponent(query)}` : ''}`;
-  const ogImage = `${siteBaseUrl}/default-og-image.png`; // Default OG image
 
-  let title = `Search Articles | ${siteName}`;
-  let description = 'Search for articles on our site.';
-  const robots = query ? { index: true, follow: true } : { index: false, follow: false }; // Don't index empty search page
+  const ogImageSource = settings.defaultOgImage;
+  const ogImage = ogImageSource
+    ? (ogImageSource.startsWith('http') ? ogImageSource : `${siteBaseUrl}${ogImageSource.startsWith('/') ? '' : '/'}${ogImageSource}`)
+    : `${siteBaseUrl}/default-og-image.png`;
+
+  let pageTitle = `Search Articles`;
+  let pageDescription = settings.siteTagline || 'Search for articles on our site.';
+  const robots = query ? { index: true, follow: true } : { index: false, follow: false };
 
   if (query) {
-    title = `Search results for "${query}" | ${siteName}`;
-    description = `Find articles matching the search term "${query}".`;
+    pageTitle = `Search results for "${query}"`;
+    pageDescription = `Find articles matching the search term "${query}".`;
   }
 
   return {
-    title: title,
-    description: description,
+    title: pageTitle, // Root layout will append "| SiteName"
+    description: pageDescription,
     robots: robots,
     alternates: {
         canonical: currentUrl,
     },
     openGraph: {
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       url: currentUrl,
-      siteName: siteName,
+      // siteName from root layout
       images: [{ url: ogImage, width: 1200, height: 630 }],
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       images: [ogImage],
-      // site: '@yourTwitterHandle',
+      // site: settings.twitterHandle, // Example
     },
   };
 }

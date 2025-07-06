@@ -40,10 +40,19 @@ const ArticleCard: React.FC<{ article: IArticle }> = ({ article }) => {
 interface CategoryArchivePageProps {
   params: { categorySlug: string };
   searchParams: { page?: string };
+import { getSiteSettings as fetchSiteSettings } from '@/lib/settingsService'; // aliased to avoid conflict
+
 }
 
-async function getCategoryAndArticles(categorySlug: string, page: number = 1, limit: number = 10) {
+async function getCategoryAndArticles(categorySlug: string, page: number = 1, defaultLimit?: number) {
   await dbConnect();
+
+  let limit = defaultLimit;
+  if (limit === undefined) {
+    const settings = await fetchSiteSettings();
+    limit = settings.postsPerPage > 0 ? settings.postsPerPage : 10;
+  }
+
   const category = await CategoryModel.findOne({ slug: categorySlug }).lean<ICategory>();
 
   if (!category) {
@@ -64,43 +73,51 @@ async function getCategoryAndArticles(categorySlug: string, page: number = 1, li
   return { category, articles, totalArticles, totalPages };
 }
 
+import { getSiteSettings } from '@/lib/settingsService'; // Import settings service
+
 export async function generateMetadata({ params }: CategoryArchivePageProps): Promise<Metadata> {
+  const settings = await getSiteSettings();
   const { category } = await getCategoryAndArticles(params.categorySlug);
   const siteBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS';
+  // const siteName = settings.siteTitle || process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS'; // siteName from root layout
 
   if (!category) {
     return {
-      title: 'Category Not Found',
+      title: 'Category Not Found', // Will be formatted by root layout
       robots: { index: false, follow: false },
     };
   }
 
-  const title = `Articles in ${category.name} | ${siteName}`;
-  const description = `Browse articles categorized under ${category.name}. ${category.description || ''}`;
+  const pageTitle = `Articles in ${category.name}`;
+  const pageDescription = `Browse articles categorized under ${category.name}. ${category.description || settings.siteTagline || ''}`;
   const currentUrl = `${siteBaseUrl}/category/${category.slug}`;
-  const ogImage = `${siteBaseUrl}/default-og-image.png`; // Default OG image for category pages
+
+  const ogImageSource = settings.defaultOgImage;
+  const ogImage = ogImageSource
+    ? (ogImageSource.startsWith('http') ? ogImageSource : `${siteBaseUrl}${ogImageSource.startsWith('/') ? '' : '/'}${ogImageSource}`)
+    : `${siteBaseUrl}/default-og-image.png`;
+
 
   return {
-    title: title,
-    description: description,
+    title: pageTitle, // Root layout will append "| SiteName"
+    description: pageDescription,
     alternates: {
         canonical: currentUrl,
     },
     openGraph: {
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       url: currentUrl,
-      siteName: siteName,
+      // siteName from root layout
       images: [{ url: ogImage, width: 1200, height: 630 }],
-      type: 'website', // Or 'profile' if it makes sense for a category/tag page
+      type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       images: [ogImage],
-      // site: '@yourTwitterHandle',
+      // site: settings.twitterHandle, // Example
     },
   };
 }

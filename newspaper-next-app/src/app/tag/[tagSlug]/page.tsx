@@ -37,10 +37,19 @@ const ArticleCard: React.FC<{ article: IArticle }> = ({ article }) => {
 interface TagArchivePageProps {
   params: { tagSlug: string };
   searchParams: { page?: string };
+import { getSiteSettings as fetchSiteSettings } from '@/lib/settingsService'; // aliased
+
 }
 
-async function getTagAndArticles(tagSlug: string, page: number = 1, limit: number = 10) {
+async function getTagAndArticles(tagSlug: string, page: number = 1, defaultLimit?: number) {
   await dbConnect();
+
+  let limit = defaultLimit;
+  if (limit === undefined) {
+    const settings = await fetchSiteSettings();
+    limit = settings.postsPerPage > 0 ? settings.postsPerPage : 10;
+  }
+
   const tag = await TagModel.findOne({ slug: tagSlug }).lean<ITag>();
 
   if (!tag) {
@@ -62,43 +71,50 @@ async function getTagAndArticles(tagSlug: string, page: number = 1, limit: numbe
   return { tag, articles, totalArticles, totalPages };
 }
 
+import { getSiteSettings } from '@/lib/settingsService'; // Import settings service
+
 export async function generateMetadata({ params }: TagArchivePageProps): Promise<Metadata> {
+  const settings = await getSiteSettings();
   const { tag } = await getTagAndArticles(params.tagSlug);
   const siteBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS';
+  // const siteName = settings.siteTitle || process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS'; // From root layout
 
   if (!tag) {
     return {
-      title: 'Tag Not Found',
+      title: 'Tag Not Found', // Will be formatted by root layout
       robots: { index: false, follow: false },
     };
   }
 
-  const title = `Articles tagged with "${tag.name}" | ${siteName}`;
-  const description = `Browse articles tagged with "${tag.name}".`;
+  const pageTitle = `Articles tagged with "${tag.name}"`;
+  const pageDescription = `Browse articles tagged with "${tag.name}". ${settings.siteTagline || ''}`;
   const currentUrl = `${siteBaseUrl}/tag/${tag.slug}`;
-  const ogImage = `${siteBaseUrl}/default-og-image.png`; // Default OG image for tag pages
+
+  const ogImageSource = settings.defaultOgImage;
+  const ogImage = ogImageSource
+    ? (ogImageSource.startsWith('http') ? ogImageSource : `${siteBaseUrl}${ogImageSource.startsWith('/') ? '' : '/'}${ogImageSource}`)
+    : `${siteBaseUrl}/default-og-image.png`;
 
   return {
-    title: title,
-    description: description,
+    title: pageTitle, // Root layout will append "| SiteName"
+    description: pageDescription,
     alternates: {
         canonical: currentUrl,
     },
     openGraph: {
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       url: currentUrl,
-      siteName: siteName,
+      // siteName from root layout
       images: [{ url: ogImage, width: 1200, height: 630 }],
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       images: [ogImage],
-      // site: '@yourTwitterHandle',
+      // site: settings.twitterHandle, // Example
     },
   };
 }

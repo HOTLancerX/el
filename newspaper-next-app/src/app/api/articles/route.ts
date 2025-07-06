@@ -68,15 +68,20 @@ export async function POST(req: NextRequest) {
   }
 }
 
+import { getSiteSettings } from '@/lib/settingsService'; // Import settings service
+
 // GET: Fetch all articles (with pagination and filtering options in a real app)
 export async function GET(req: NextRequest) {
   await dbConnect();
+  const settings = await getSiteSettings(); // Fetch site settings
+
   try {
     // Basic find for now. Add pagination, filtering, sorting later.
     // Example: /api/articles?status=published&category=tech&page=1&limit=10
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    // Use postsPerPage from settings, fallback to 10 if not set or invalid
+    const limit = parseInt(searchParams.get('limit') || String(settings.postsPerPage > 0 ? settings.postsPerPage : 10));
     const status = searchParams.get('status');
     const categorySlug = searchParams.get('category'); // filter by category slug
     const tagSlug = searchParams.get('tag'); // filter by tag slug

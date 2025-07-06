@@ -58,6 +58,24 @@ Default admin credentials (defined in NextAuth config, **for development only**)
 
 Access the admin panel at (route to be defined, e.g., `/admin`).
 
+## Admin Panel Features
+
+The admin panel provides functionality to manage various aspects of the CMS:
+
+*   **User Management**: List users (further role management can be expanded).
+*   **Content Management (Articles)**: Create, list, and edit articles with a rich text editor (TipTap). Manage categories, tags, and status.
+*   **Category Management**: Full CRUD operations for article categories.
+*   **Tag Management**: UI for CRUD operations for tags (backend API is placeholder).
+*   **Media Management**: Upload images/media to Cloudflare R2 (via presigned URLs) and list media. (Backend API for metadata is placeholder).
+*   **Layout Builder**: Foundational UI to create and manage page/article layouts using a drag-and-drop interface (rows, columns, widgets).
+*   **Site Settings**: Configure global site settings via `/admin/settings`. This includes:
+    *   Site Title
+    *   Site Tagline
+    *   Logo URL
+    *   Favicon URL
+    *   Posts Per Page (for archive views)
+    *   Default Open Graph Image URL
+
 ## Deployment
 
 This Next.js application can be deployed to any platform that supports Node.js or Next.js hosting (e.g., Vercel, Netlify, AWS, Google Cloud, Azure).

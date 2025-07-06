@@ -91,58 +91,64 @@ async function getContentData(slugParts?: string[]): Promise<{ type: 'page' | 'a
 }
 
 
+import { getSiteSettings } from '@/lib/settingsService'; // Import settings service
+
 export async function generateMetadata({ params }: DynamicPageProps): Promise<Metadata> {
+  const settings = await getSiteSettings();
   const { data, type } = await getContentData(params.slug);
-  const siteBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'; // Fallback for local dev
+  const siteBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
   if (type === 'notFound' || !data) {
     return {
-      title: 'Page Not Found',
-      robots: { index: false, follow: false }, // Tell search engines not to index 404s
+      title: 'Page Not Found', // Will be formatted by root layout's template
+      robots: { index: false, follow: false },
     };
   }
 
-  const title = data.metaTitle || data.title || 'Page';
-  const description = data.metaDescription || (type === 'article' ? (data as IArticle).excerpt?.substring(0, 160) : undefined) || 'Page description';
+  const pageTitle = data.metaTitle || data.title || 'Page';
+  const pageDescription = data.metaDescription || (type === 'article' ? (data as IArticle).excerpt?.substring(0, 160) : undefined) || settings.siteTagline || 'Page description';
   const slug = params.slug?.join('/') || '';
-  const currentUrl = `${siteBaseUrl}/${slug}`;
-  // Determine og:image (prioritize featuredImage for articles)
-  let ogImage = `${siteBaseUrl}/default-og-image.png`; // Fallback OG image
+  const currentUrl = `${siteBaseUrl}/${slug === '/' ? '' : slug}`; // Handle homepage slug correctly
+
+  let ogImageSource: string | undefined;
   if (type === 'article' && (data as IArticle).featuredImage) {
-    const featuredImageUrl = (data as IArticle).featuredImage as string;
-    // Ensure featuredImage is an absolute URL or prepend base URL
-    ogImage = featuredImageUrl.startsWith('http') ? featuredImageUrl : `${siteBaseUrl}${featuredImageUrl}`;
+    ogImageSource = (data as IArticle).featuredImage as string;
+  } else {
+    ogImageSource = settings.defaultOgImage;
   }
+
+  const ogImage = ogImageSource
+    ? (ogImageSource.startsWith('http') ? ogImageSource : `${siteBaseUrl}${ogImageSource.startsWith('/') ? '' : '/'}${ogImageSource}`)
+    : `${siteBaseUrl}/default-og-image.png`; // Ultimate fallback
 
 
   return {
-    title: title,
-    description: description,
+    title: pageTitle, // Root layout will append "| SiteName"
+    description: pageDescription,
     alternates: {
         canonical: currentUrl,
     },
     openGraph: {
-      title: title,
-      description: description,
+      title: pageTitle, // Specific page title for OG
+      description: pageDescription,
       url: currentUrl,
-      siteName: process.env.NEXT_PUBLIC_SITE_NAME || 'Newspaper CMS', // Add NEXT_PUBLIC_SITE_NAME to .env
-      images: [{ url: ogImage, width: 1200, height: 630 }], // Provide default dimensions
+      // siteName is inherited from root layout or can be set here if needed
+      images: [{ url: ogImage, width: 1200, height: 630 }],
       type: type === 'article' ? 'article' : 'website',
-      // For articles, add more specific OG tags like article:published_time, article:author etc.
       ...(type === 'article' && {
         publishedTime: (data as IArticle).publicationDate?.toISOString(),
-        // authors: typeof (data as IArticle).author === 'object' ? [(data as IArticle).author as any].name : undefined, // Simplified
+        // TODO: Add author data if available and desired
+        // authors: (data as IArticle).author?.name ? [(data as IArticle).author.name] : undefined,
       }),
     },
     twitter: {
       card: 'summary_large_image',
-      title: title,
-      description: description,
+      title: pageTitle,
+      description: pageDescription,
       images: [ogImage],
-      // site: '@yourTwitterHandle', // Add your Twitter handle
-      // creator: '@authorTwitterHandle', // If available
+      // site: settings.twitterHandle || '@YourDefaultHandle', // Example if you add twitterHandle to settings
+      // creator: (data as IArticle).author?.twitterHandle || undefined, // Example
     },
-    // Add other SEO metadata: keywords, etc.
   };
 }
 
